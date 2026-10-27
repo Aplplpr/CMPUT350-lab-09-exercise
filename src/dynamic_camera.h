@@ -47,6 +47,50 @@ struct DynamicCamera {
         // lookahead) appropriately. Next,
         // set the camera center by offsetting the cameraUnadjustedCenter, combining lookAhead.
         // Finally update cameraUnadjustedCenter, but without lookahead.
+
+        // 1. Calculate lookahead based on player velocity
+        float targetLookahead = 0.f;
+        if (trackedVelocityWorld.x > 0.f) {
+            targetLookahead = camera.windowPercentToWorldDist(
+                {lookAhead, 0.f}).x;
+        } else if (trackedVelocityWorld.x < 0.f) {
+            targetLookahead = camera.windowPercentToWorldDist(
+                {-lookAhead, 0.f}).x;
+        }
+
+        // 2. Smoothly update lookahead using EMA
+        lookaheadState += alpha * (targetLookahead - lookaheadState);
+
+        // 3. Find player position relative to camera without lookahead
+        float playerX = trackedPosWorld.x - cameraUnadjustedCenter.x;
+
+        // 4. Convert zone boundaries into world distances
+        
+        float leftDead = camera.windowPercentToWorldDist({deadZoneX.min - 0.5f, 0.f}).x;
+        float rightDead = camera.windowPercentToWorldDist({deadZoneX.max - 0.5f, 0.f}).x;
+        float leftHard = camera.windowPercentToWorldDist({softZoneX.min - 0.5f, 0.f}).x;
+        float rightHard = camera.windowPercentToWorldDist({softZoneX.max - 0.5f, 0.f}).x;
+
+
+        // 5. Calculate camera displacement without lookahead
+        float delta = 0.f;
+
+        if (playerX < leftHard) {
+            delta = playerX - leftHard;
+        } else if (playerX > rightHard) {
+            delta = playerX - rightHard;
+        } else if (playerX < leftDead) {
+            delta = alpha * (playerX - leftDead);
+        } else if (playerX > rightDead) {
+            delta = alpha * (playerX - rightDead);
+        }
+
+        // 6. Update camera center with lookahead
+        cameraUnadjustedCenter.x += delta;
+
+        sf::Vector2f newCenter = cameraUnadjustedCenter;
+        newCenter.x += lookaheadState;
+        camera.setCameraCenter(newCenter);
     }
 
     float alpha;  // alpha to use for damping of camera position, *as well as* for smoothing of
